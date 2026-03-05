@@ -1,2 +1,3 @@
 # WeiboFish
 模仿Mirofish制作的政务新媒体多智能体仿真平台
+GitHub上传版本为本地版，需要准备api。目前仅支持使用DeepSeek。
