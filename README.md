@@ -1,0 +1,2 @@
+# WeiboFish
+模仿Mirofish制作的政务新媒体多智能体仿真平台
