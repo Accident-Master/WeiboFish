@@ -368,7 +368,7 @@ def draw_dashboard_to_st(sim_data, time_labels, time_unit):
 # ==========================================
 # 6. 前端交互主视图
 # ==========================================
-st.title("🐟 WeiboFish：政务新媒体多智能体仿真沙盘(beta)")
+st.title("🐟 WeiboFish：政务新媒体多智能体仿真沙盘")
 st.markdown("基于 **32万条政务博文数据** 与多智能体模拟，快速推演政务新媒体的典型舆论情境")
 
 prov_city_map, city_vol_map, prov_vol_map, global_vol = load_agenda_data()
