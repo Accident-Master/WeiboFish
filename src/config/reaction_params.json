@@ -1,0 +1,12 @@
+{
+  "model_type": "linear_fe",
+  "description": "基于真实数据跑出的超额互动(残差绩效)线性预测模型",
+  "baseline_intercept": -0.0237,
+  "coefficients": {
+    "readability": 0.3705,
+    "emotion_intensity": -0.0469,
+    "media_richness": 0.2010,
+    "agenda_stability": 0.0741,
+    "policy_attention": 0.0700
+  }
+}

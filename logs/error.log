@@ -1,0 +1,21 @@
+2026-03-04 04:50:17.700 INFO    matplotlib.font_manager: generated new fontManager
+Traceback (most recent call last):
+  File "/www/wwwroot/weibofish/app.py", line 9, in <module>
+    import streamlit as st
+  File "/www/wwwroot/weibofish/e6574d66e6c3d5aa4ff4a8d70d14a824_venv/lib/python3.9/site-packages/streamlit/__init__.py", line 70, in <module>
+    from streamlit.delta_generator import DeltaGenerator as _DeltaGenerator
+  File "/www/wwwroot/weibofish/e6574d66e6c3d5aa4ff4a8d70d14a824_venv/lib/python3.9/site-packages/streamlit/delta_generator.py", line 90, in <module>
+    from streamlit.elements.arrow_altair import ArrowAltairMixin
+  File "/www/wwwroot/weibofish/e6574d66e6c3d5aa4ff4a8d70d14a824_venv/lib/python3.9/site-packages/streamlit/elements/arrow_altair.py", line 35, in <module>
+    from altair.vegalite.v4.api import Chart
+ModuleNotFoundError: No module named 'altair.vegalite.v4'
+Traceback (most recent call last):
+  File "/www/wwwroot/weibofish/app.py", line 9, in <module>
+    import streamlit as st
+  File "/www/wwwroot/weibofish/e6574d66e6c3d5aa4ff4a8d70d14a824_venv/lib/python3.9/site-packages/streamlit/__init__.py", line 70, in <module>
+    from streamlit.delta_generator import DeltaGenerator as _DeltaGenerator
+  File "/www/wwwroot/weibofish/e6574d66e6c3d5aa4ff4a8d70d14a824_venv/lib/python3.9/site-packages/streamlit/delta_generator.py", line 90, in <module>
+    from streamlit.elements.arrow_altair import ArrowAltairMixin
+  File "/www/wwwroot/weibofish/e6574d66e6c3d5aa4ff4a8d70d14a824_venv/lib/python3.9/site-packages/streamlit/elements/arrow_altair.py", line 35, in <module>
+    from altair.vegalite.v4.api import Chart
+ModuleNotFoundError: No module named 'altair.vegalite.v4'
