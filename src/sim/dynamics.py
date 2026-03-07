@@ -22,7 +22,7 @@ from src.sim.memory import HistoricalMemory
 # ==========================================
 # 2. 全局配置
 # ==========================================
-DEEPSEEK_API_KEY = "sk-a24a13bc0f564fc7a1739d0da0e01fe9"
+DEEPSEEK_API_KEY = ""
 client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
 
 
