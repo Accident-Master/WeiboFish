@@ -8,3 +8,5 @@ torch
 transformers
 numpy
 scikit-learn
+sentence-transformers
+faiss-cpu

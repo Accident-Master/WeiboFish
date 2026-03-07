@@ -311,9 +311,11 @@ class StreamlitAgent:
         try:
             res = self.client.chat.completions.create(
                 model="deepseek-chat",
-                messages=[{"role": "system", "content": system_prompt},
-                          {"role": "user",
-                           "content": f"【最新通报】：{post}\n【前排评论快照(请积极寻找可回复的对象)】：\n{social_context}"}],
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user",
+                     "content": f"【最新通报】：{post}\n\n{history}\n\n【前排评论快照(请积极寻找可回复的对象)】：\n{social_context}\n\n(提示：请结合你的性格，参考上述历史相似案例的【真实互动量】，来决定你这次的反应)"}
+                ],
                 response_format={"type": "json_object"},
                 temperature=0.85
             )
@@ -451,21 +453,52 @@ if st.button("🚀 运行 weibofish 实证推演", use_container_width=True, typ
         else:
             bias_str = "日常浏览，跟风点赞为主"
 
-    # --- 阶段二：多智能体推演 ---
-    st.markdown("---")
-    st.subheader("一、微观群体行为漏斗与潜意识透视")
+        # --- 阶段二：历史相似案卷检索 (RAG) ---
+        st.markdown("---")
+        st.subheader("一、历史相似案卷检索 (RAG)")
 
-    col_chat, col_os = st.columns([1.2, 1.2])
-    with col_chat:
-        st.caption("🗣️ **前台：显性互动区** (点赞、转发与盖楼回复)")
-        chat_box = st.container(height=550)
-    with col_os:
-        st.caption("💭 **后台：潜意识监控区** (无拘无束的真实心理活动)")
-        os_box = st.container(height=550)
+        # 1. 提前进行检索
+        related = mem.retrieve_similar(context_text, top_k=3)
 
-    related = mem.retrieve_similar(context_text, top_k=2)
-    history_str = "\n".join([f"[{c['date']}] {c['content'][:30]}" for c in related])
+        # 2. 在独立的 UI 容器中展示结果 (不在分栏里了，独占一行)
+        if related:
+            st.success(f"🔍 记忆唤醒：成功从 32 万条历史语料中，匹配到 {len(related)} 条相似的真实案例！")
+            with st.expander("🧠 点击展开查看详细历史卷宗", expanded=True):
+                for i, c in enumerate(related):
+                    st.markdown(f"**【案例 {i + 1}】** 匹配度: `{c['score']:.4f}`")
+                    st.markdown(
+                        f"👤 **发布账号**：{c.get('account', '未知')} &nbsp;&nbsp;|&nbsp;&nbsp; 🕒 **时间**：{c.get('date', '未知')}")
+                    st.markdown(f"📊 **真实互动**：`{c.get('engagement', '无数据')}`")
+                    # 嵌套一个默认折叠的面板来展示完整原文
+                    with st.expander("📝 点击查看完整原文", expanded=False):
+                        st.info(c.get('content', '无内容'))
+                    if i < len(related) - 1:
+                        st.divider()
+        else:
+            st.info("💡 系统中暂未匹配到极度相似的历史案例，Agent 将依靠基础社会常识进行推演。")
 
+        # 3. 把记忆组装成字符串，准备喂给下面的大模型
+        if related:
+            history_str = "【历史相似案例与真实反响参考】\n" + "\n".join([
+                f"-> 时间：{c.get('date', '未知')} | 账号：【{c.get('account', '未知')}】\n"
+                f"-> 真实互动量：{c.get('engagement', '无数据')}\n"
+                f"-> 相似内容：{c.get('content', '无内容')[:60]}...\n"
+                for c in related
+            ])
+        else:
+            history_str = "【历史相似案例参考】：暂无极度相似的历史通报。"
+
+        # --- 阶段三：多智能体推演实况 (MAS) ---
+        st.markdown("---")
+        st.subheader("二、微观群体行为漏斗与潜意识透视")
+
+        col_chat, col_os = st.columns([1.2, 1.2])
+        with col_chat:
+            st.caption("🗣️ **前台：显性互动区** (点赞、转发与盖楼回复)")
+            chat_box = st.container(height=550)
+        with col_os:
+            st.caption("💭 **后台：潜意识监控区** (无拘无束的真实心理活动)")
+            os_box = st.container(height=550)
     # =================按比例抽样逻辑开始=================
     stance_pools = {}
     for p in personas:
@@ -625,7 +658,7 @@ if st.button("🚀 运行 weibofish 实证推演", use_container_width=True, typ
 
     # --- 阶段三：核心数据看板 ---
     st.markdown("---")
-    st.subheader(f"二、舆论场漏斗数据看板 (追踪时效：{max_time} {time_unit})")
+    st.subheader(f"三、舆论场漏斗数据看板 (追踪时效：{max_time} {time_unit})")
 
     col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("👁️ 样本曝光人数", f"{sim_data['exposure'][-1]} 人")
@@ -638,7 +671,7 @@ if st.button("🚀 运行 weibofish 实证推演", use_container_width=True, typ
 
     # --- 阶段 3.5：模拟互动评论区还原 ---
     st.markdown("---")
-    st.subheader("💬 三、模拟博文及评论区互动还原")
+    st.subheader("💬 四、模拟博文及评论区互动还原")
     st.caption("真实呈现前台盖楼与点赞情况（含参与网民之隐性特征标注）：")
 
     html_str = ""
@@ -709,35 +742,39 @@ if st.button("🚀 运行 weibofish 实证推演", use_container_width=True, typ
 
     # --- 阶段四：政务智库研判专报 ---
     st.markdown("---")
-    st.subheader("四、政务内参：舆论场心理诊断")
+    st.subheader("五、政务内参：舆论场心理诊断")
     with st.spinner("智库模型正在对齐实证预测与沙盘结果，深度生成应对策略..."):
         prompt = f"""你是一名专门为政府高层提供核心内参的顶级社会学与数据分析专家。
-        【原始通报文本】：{post_content}
-        【事件发生地】：{city_name}
+                【原始通报文本】：{post_content}
+                【事件发生地】：{city_name}
 
-        [理论定量数据]：
-        【论文实证预估互动率基准】：{act_prob:.1%}
-        【模型理论预测结论】：该博文{perf_eval_str}
-        【追踪时效】：{max_time} {time_unit}
+                [理论定量数据]：
+                【论文实证预估互动率基准】：{act_prob:.1%}
+                【模型理论预测结论】：该博文{perf_eval_str}
+                【追踪时效】：{max_time} {time_unit}
 
-        [沙盘抽样演化数据]（注：本次推演仅为有限智能体抽样所展现的可能情境之一）：
-        【抽样曝光总人数】：{sim_data['exposure'][-1]}
-        【实际互动总人数】：{sim_data['interaction'][-1]} (原博点赞{stats['like']}, 评论点赞{stats['like_comment']}, 转发{stats['forward']}, 评论{stats['comment']})
-        【仅浏览不互动的潜水者】：{stats['view_only']}
+                [历史记忆与对标案卷]：
+                {history_str}
 
-        [定性语料数据]：
-        【前台-公开互动与盖楼记录】：{full_logs}
-        【后台-网民潜意识OS】：{thoughts_pool}
+                [沙盘抽样演化数据]（注：本次推演仅为有限智能体抽样所展现的可能情境之一）：
+                【抽样曝光总人数】：{sim_data['exposure'][-1]}
+                【实际互动总人数】：{sim_data['interaction'][-1]} (原博点赞{stats['like']}, 评论点赞{stats['like_comment']}, 转发{stats['forward']}, 评论{stats['comment']})
+                【仅浏览不互动的潜水者】：{stats['view_only']}
 
-        【排版红线要求】：
-        1. 绝对禁止使用任何 Markdown 星号（*）！
-        2. 请使用全角中文标点，使用“一、二、三、”作为主标题，“1. 2. 3.”作为子标题，保持排版的干净、严肃（注意：数字、百分号及数字中的小数点必须保持半角，如“35.2%”，严禁写成“35。2％”）。
+                [定性语料数据]：
+                【前台-公开互动与盖楼记录】：{full_logs}
+                【后台-网民潜意识OS】：{thoughts_pool}
 
-        【核心诊断任务】：
-        1. **潜质定调与偏差解释**：直接依据【模型理论预测结论】（即该博文{perf_eval_str}）对本文的传播潜质进行理论定调。同时，请特别注意解释理论预测与本次【沙盘抽样演化数据】之间可能存在的差异——请明确指出，由于现实中微博浏览量动辄上万且环境复杂，智能体抽样存在偶然性，当前的沙盘结果实际上是快速模拟出的“最可能发生的典型情境之一”（例如刚好抽样到了特定情绪的群体）。
-        2. **本地群体心态与高赞评论研判**：分析{city_name}当地网民的前台支持与后台OS的温差，特别注意【评论点赞数】和盖楼互动情况，指出基于当前模拟情境下当地潜在的社会风险点与具有影响力的代表性言论。
-        3. **针对性文本重构策略**：给出非常具体的修改建议。
-        """
+                【排版红线要求】：
+                1. 绝对禁止使用任何 Markdown 星号（*）！
+                2. 请使用全角中文标点，使用“一、二、三、”作为主标题，“1. 2. 3.”作为子标题，保持排版的干净、严肃（注意：数字、百分号及数字中的小数点必须保持半角，如“35.2%”，严禁写成“35。2％”）。
+
+                【核心诊断任务】：
+                1. **历史案卷对标与经验萃取**：严格对照提供的【历史记忆与对标案卷】（如果有的话），分析历史上同类通报的真实网民互动表现。指出历史经验对本次事件处置的借鉴意义（例如历史通报是成功平息了舆论，还是引发了次生灾害）。
+                2. **潜质定调与偏差解释**：结合【模型理论预测结论】与本次【沙盘抽样演化数据】进行对比。指出由于现实中微博环境复杂，当前沙盘展现的“典型情境”与理论预估之间存在何种偏差及原因。
+                3. **本地群体心态与高赞评论研判**：分析{city_name}当地网民的前台支持与后台OS的温差，特别注意【评论点赞数】和盖楼互动情况，指出潜在的社会风险点。
+                4. **针对性文本重构策略**：基于以上所有分析（特别是历史翻车或成功的经验），给出非常具体的通报文本修改建议。
+                """
 
         obs = client.chat.completions.create(
             model="deepseek-reasoner",

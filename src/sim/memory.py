@@ -1,79 +1,76 @@
 import pandas as pd
-import numpy as np
+import faiss
 import os
 from pathlib import Path
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+from sentence_transformers import SentenceTransformer
 
 
 class HistoricalMemory:
     """
-    基于 RAG 的记忆模块：从 32 万条数据中检索相似案例
+    基于 FAISS + BGE 向量化模型的极致轻量级 RAG 记忆模块
+    （适配最新的微博数据集字段结构）
     """
 
-    def __init__(self, filename="文章列表汇总.xlsx"):
-        # 自动定位项目根目录下的 data 文件夹
-        # 无论脚本在 src 的哪一层，只要向上找直到看见 'data' 文件夹即可
+    def __init__(self):
         self.project_root = self._find_project_root()
         self.data_dir = self.project_root / "data"
-        self.raw_file = self.data_dir / filename
-        self.cache_file = self.data_dir / "weibo_memory_cache.csv"  # 缓存为CSV，下次秒读
 
-        self.df = None
-        self.vectorizer = TfidfVectorizer(max_features=5000)
-        self.tfidf_matrix = None
+        self.index_file = self.data_dir / "weibo_memory.index"
+        self.meta_file = self.data_dir / "weibo_memory_meta.pkl"
 
-        self._load_and_index()
+        # 加载与本地构建时完全相同的模型，用于在线实时推理用户的输入
+        self.model = SentenceTransformer('BAAI/bge-small-zh-v1.5')
+
+        self.index = None
+        self.meta_df = None
+        self._load_memory()
 
     def _find_project_root(self):
-        """向上查找包含 data 文件夹的目录作为项目根目录"""
         curr = Path(__file__).resolve()
         for parent in curr.parents:
             if (parent / "data").exists():
                 return parent
-        # 兜底：如果找不到，就返回当前脚本的上三级
         return curr.parent.parent.parent
 
-    def _load_and_index(self):
-        # 1. 优先读取 CSV 缓存
-        if self.cache_file.exists():
-            print(f" 发现缓存，正在快速加载历史记忆库...")
-            self.df = pd.read_csv(self.cache_file).fillna("")
+    def _load_memory(self):
+        if self.index_file.exists() and self.meta_file.exists():
+            # 毫秒级加载 30 万条向量和文本
+            self.index = faiss.read_index(str(self.index_file))
+            self.meta_df = pd.read_pickle(str(self.meta_file))
+            print(f"✅ 语义记忆库 (FAISS) 加载完成，共载入 {len(self.meta_df)} 条历史经验。")
         else:
-            print(f" 第一次运行，正在从 Excel 加载 32 万条数据 (请耐心等待约 1 分钟)...")
-            if not self.raw_file.exists():
-                raise FileNotFoundError(f"找不到原始数据文件: {self.raw_file}")
+            print("⚠️ 未找到向量库文件，请先在本地运行 build_vector_db.py 构建索引，并放入 data/ 目录。")
 
-            # 分块读取或直接读取并保存为缓存
-            self.df = pd.read_excel(self.raw_file).fillna("")
-            self.df.to_csv(self.cache_file, index=False, encoding='utf-8-sig')
-            print(f"已生成 CSV 缓存，下次启动将提速 10 倍。")
-
-        # 2. 建立 TF-IDF 索引
-        print(f" 正在对 {len(self.df)} 条政务数据建立语义索引...")
-        # 确保内容列是字符串
-        self.df['内容'] = self.df['内容'].astype(str)
-        self.tfidf_matrix = self.vectorizer.fit_transform(self.df['内容'])
-        print(" 记忆库索引构建完成。")
-
-    def retrieve_similar(self, current_text, top_k=2):
-        if self.tfidf_matrix is None or not current_text:
+    def retrieve_similar(self, current_text, top_k=3):
+        """
+        基于当前微博文本，检索最相似的历史案例
+        """
+        if self.index is None or not current_text:
             return []
 
-        # 语义检索逻辑
-        current_vec = self.vectorizer.transform([current_text])
-        similarities = cosine_similarity(current_vec, self.tfidf_matrix).flatten()
-        top_indices = similarities.argsort()[-top_k:][::-1]
+        # 1. 实时计算当前文本的向量
+        query_vec = self.model.encode([current_text], normalize_embeddings=True)
+
+        # 2. FAISS 极速检索
+        similarities, top_indices = self.index.search(query_vec, top_k)
 
         results = []
-        for idx in top_indices:
-            # 过滤掉相似度太低的（比如低于 0.2 的可能根本不相关）
-            if similarities[idx] > 0.1:
+        for i in range(top_k):
+            idx = top_indices[0][i]
+            sim_score = similarities[0][i]
+
+            # 设置一个阈值，语义相似度低于 0.6 通常意味着关联性不大，属于强行匹配
+            if len(current_text.strip()) < 5:
+                continue
+            if sim_score > 0.6:
+                row = self.meta_df.iloc[idx]
                 results.append({
-                    "content": self.df.iloc[idx]['内容'],
-                    "account": self.df.iloc[idx].get('账号名字', '未知单位'),
-                    "date": self.df.iloc[idx].get('发布时间', '往期'),
-                    "score": float(similarities[idx])
+                    "content": str(row.get('内容', '')),
+                    "account": str(row.get('账号名字', '未知账号')),
+                    "date": str(row.get('发布时间', '未知时间')),
+                    "link": str(row.get('博文链接', '#')),
+                    "engagement": f"转:{row.get('转发数', 0)} 赞:{row.get('点赞数', 0)} 评:{row.get('评论数', 0)}",
+                    "score": float(sim_score)
                 })
         return results
 
@@ -81,15 +78,10 @@ class HistoricalMemory:
 # === 测试代码 ===
 if __name__ == "__main__":
     mem = HistoricalMemory()
-    # 测试检索
-    test_text = "关于网传某商场打人事件，我局已控制涉案人员。"
-    cases = mem.retrieve_similar(test_text)
-
-    print("\n" + "—" * 30)
-    print(" 模拟 Agent 联想到的历史类似事件：")
-    if not cases:
-        print("   (未找到高度相关的历史案例)")
-    for i, c in enumerate(cases):
-        print(f"{i + 1}. 【{c['account']} | {c['date']}】")
-        print(f"   内容: {c['content'][:60]}...")
-        print(f"   相关度: {c['score']:.2%}")
+    test_text = "关于网传某地突发事件的情况通报，相关部门已介入调查..."
+    print(f"正在为您检索与【{test_text[:15]}...】最相似的历史应对案例：")
+    res = mem.retrieve_similar(test_text)
+    for i, r in enumerate(res):
+        print(f"\n[{i + 1}] 匹配度: {r['score']:.4f} | 账号: {r['account']} | 时间: {r['date']}")
+        print(f"互动数据: {r['engagement']}")
+        print(f"内容截取: {r['content'][:100]}...")
